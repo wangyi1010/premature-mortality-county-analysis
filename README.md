@@ -39,6 +39,34 @@ the same places where child poverty and smoking are highest.
   <img src="outputs/figures/correlations.png" width="49%" />
 </p>
 
+## Spatial analysis
+
+County data are not independent observations: neighbouring counties share
+unobserved regional factors, so an ordinary least-squares model can understate its
+own uncertainty. This is the central methodological risk of an ecological design,
+so the project tests for it directly.
+
+Moran's I on the OLS residuals is **0.28 (p ≈ 2 × 10⁻¹¹⁰)** — strong positive
+spatial autocorrelation. The residuals are not independent, so the OLS standard
+errors are unreliable.
+
+![Moran scatterplot of residuals](outputs/figures/moran_scatter.png)
+
+Refitting with spatial-econometric models (queen-contiguity weights over 2,602
+counties) confirms this and improves fit substantially:
+
+| Model | AIC | Spatial parameter |
+|---|---:|---|
+| OLS | 28,259 | — |
+| Spatial lag (SAR) | 28,024 | ρ = 0.22 |
+| **Spatial error (SEM)** | **27,856** | **λ = 0.50** |
+
+The spatial error model fits best, implying the leftover clustering is driven by
+**unobserved regional confounders** rather than genuine spillover between counties.
+Reassuringly, the substantive conclusions are unchanged: child poverty, smoking and
+opioid dispensing remain the leading predictors after accounting for spatial
+structure. See [`R/spatial.R`](R/spatial.R) and `outputs/spatial_summary.txt`.
+
 ## Research question
 
 What county-level social, behavioural, healthcare-access, and drug-environment factors
@@ -58,10 +86,11 @@ examined before and after controls to make the confounding explicit. Results are
 ├── R/                       # reusable functions (loaded by report, pipeline and tests)
 │   ├── data.R               #   load + merge + clean the raw datasets
 │   ├── model.R              #   OLS fit, standardised coefficients, VIF
+│   ├── spatial.R            #   spatial weights, Moran's I, SAR/SEM models
 │   └── plots.R              #   ggplot figure builders
 ├── scripts/
-│   └── run_analysis.R       # end-to-end pipeline → figures + model summary
-├── tests/testthat/          # regression tests pinning the headline results
+│   └── run_analysis.R       # end-to-end pipeline → figures + summaries
+├── tests/testthat/          # regression tests pinning the headline + spatial results
 ├── data/
 │   ├── raw/                 # original datasets (see data/README.md for provenance)
 │   └── README.md

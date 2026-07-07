@@ -76,6 +76,28 @@ plot_mortality_map <- function(df) {
                    plot.title.position = "plot")
 }
 
+#' Moran scatterplot of OLS residuals against their spatial lag.
+#'
+#' The slope of the fitted line is Moran's I; a clear positive slope is the
+#' visual signature of spatially autocorrelated residuals (nearby counties have
+#' similar errors), which violates the OLS independence assumption.
+plot_moran <- function(model, listw) {
+  resid_std <- as.numeric(scale(residuals(model)))
+  lag_resid <- spdep::lag.listw(listw, resid_std, zero.policy = TRUE)
+  d <- data.frame(resid = resid_std, lag = lag_resid)
+  moran_i <- coef(lm(lag ~ resid, data = d))[2]
+  ggplot(d, aes(resid, lag)) +
+    geom_point(alpha = 0.25, colour = PALETTE$neutral, size = 0.9) +
+    geom_hline(yintercept = 0, colour = "grey70") +
+    geom_vline(xintercept = 0, colour = "grey70") +
+    geom_smooth(method = "lm", formula = y ~ x, colour = PALETTE$accent, se = FALSE) +
+    labs(x = "Standardised OLS residual",
+         y = "Spatial lag of residual",
+         title = sprintf("Spatial autocorrelation in the residuals (Moran's I = %.2f)", moran_i),
+         subtitle = "Nearby counties have similar model errors — OLS independence is violated") +
+    theme(plot.title.position = "plot")
+}
+
 #' Actual vs fitted values, to show overall model fit.
 plot_actual_fitted <- function(model, df) {
   d <- data.frame(actual = df$premature_aamort, fitted = fitted(model))

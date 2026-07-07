@@ -1,0 +1,48 @@
+Spatial analysis of premature mortality (US counties)
+Generated: 2026-07-07 13:47 
+
+Counties matched to geometry: 2602 (islands with no neighbour: 32)
+
+Moran's I on OLS residuals = 0.280 (p = 1.86e-110)
+  -> significant positive spatial autocorrelation: OLS errors are not
+     independent, so OLS standard errors are unreliable.
+
+Model comparison:
+               model      aic          spatial_param  estimate
+                 OLS 28258.73                   <NA>        NA
+   Spatial lag (SAR) 28023.59      rho (spatial lag) 0.2187453
+ Spatial error (SEM) 27856.10 lambda (spatial error) 0.4964249
+
+Spatial error model (SEM) summary:
+
+Call:spatialreg::errorsarlm(formula = model_formula, data = df, listw = listw, 
+    zero.policy = TRUE)
+
+Residuals:
+     Min       1Q   Median       3Q      Max 
+-205.509  -29.981   -3.658   26.029  458.169 
+
+Type: error 
+Regions with no neighbours included:
+ 10 13 15 25 296 549 550 552 553 895 916 919 1189 1250 1264 1609 1614 1621 1882 1792 1796 1807 2444 2448 2459 2474 2904 2910 2922 2944 3016 3061 
+Coefficients: (asymptotic standard errors) 
+                    Estimate Std. Error z value  Pr(>|z|)
+(Intercept)       -31.683320  16.609743 -1.9075 0.0564540
+pct_smokers         8.263247   0.560874 14.7328 < 2.2e-16
+pct_obese           3.358953   0.333225 10.0801 < 2.2e-16
+pct_uninsured       1.168564   0.345759  3.3797 0.0007256
+grad_rate           0.215729   0.146067  1.4769 0.1396961
+pct_child_poverty   5.002439   0.209638 23.8623 < 2.2e-16
+opioid_rate_2016    0.428786   0.027448 15.6217 < 2.2e-16
+
+Lambda: 0.49642, LR test value: 404.62, p-value: < 2.22e-16
+Asymptotic standard error: 0.022474
+    z-value: 22.089, p-value: < 2.22e-16
+Wald statistic: 487.92, p-value: < 2.22e-16
+
+Log likelihood: -13919.05 for error model
+ML residual variance (sigma squared): 2451.6, (sigma: 49.514)
+Number of observations: 2602 
+Number of parameters estimated: 9 
+AIC: 27856, (AIC for lm: 28259)
+

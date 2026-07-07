@@ -16,8 +16,12 @@ Imports:
     readr,
     readxl,
     scales,
+    sf,
+    spatialreg,
+    spdep,
     tidyr,
-    usmap
+    usmap,
+    usmapdata
 Suggests:
     rmarkdown,
     testthat (>= 3.0.0)
