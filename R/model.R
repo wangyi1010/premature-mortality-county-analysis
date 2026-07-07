@@ -30,8 +30,17 @@ standardized_coefs <- function(df) {
 }
 
 #' Variance inflation factors for the fitted model (multicollinearity check).
+#'
+#' Computed directly from the definition VIF_j = 1 / (1 - R^2_j), where R^2_j is
+#' from regressing predictor j on all the other predictors. Done by hand to avoid
+#' a heavy dependency (car) for a one-line formula.
 vif_table <- function(model) {
-  v <- car::vif(model)
+  X <- model.matrix(model)[, -1, drop = FALSE]  # drop intercept
+  v <- vapply(seq_len(ncol(X)), function(j) {
+    r2 <- summary(lm(X[, j] ~ X[, -j, drop = FALSE]))$r.squared
+    1 / (1 - r2)
+  }, numeric(1))
+  names(v) <- colnames(X)
   tibble(term = names(v), label = variable_labels[names(v)], vif = as.numeric(v)) %>%
     arrange(desc(vif))
 }

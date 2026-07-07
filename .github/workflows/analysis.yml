@@ -23,8 +23,15 @@ jobs:
       - name: Set up pandoc
         uses: r-lib/actions/setup-pandoc@v2
 
-      - name: Restore R packages (renv)
-        uses: r-lib/actions/setup-renv@v2
+      # Install binary packages from Posit Package Manager (fast, no source
+      # compilation on Ubuntu). Versions are additionally pinned in renv.lock
+      # for local reproducibility via `renv::restore()`.
+      - name: Install R package dependencies
+        uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: |
+            any::rmarkdown
+            any::testthat
 
       - name: Run tests
         run: Rscript tests/testthat.R

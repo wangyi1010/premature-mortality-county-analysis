@@ -10,7 +10,6 @@ Description: A reproducible analysis of the social, behavioural,
 License: MIT + file LICENSE
 Encoding: UTF-8
 Imports:
-    car,
     dplyr,
     ggplot2,
     knitr,

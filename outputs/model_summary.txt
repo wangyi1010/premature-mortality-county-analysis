@@ -1,5 +1,5 @@
 Premature mortality at the US county level -- model summary
-Generated: 2026-07-07 12:39 
+Generated: 2026-07-07 12:53 
 
 N = 2611 counties | R-squared = 0.732 | adjusted R-squared = 0.731
 
