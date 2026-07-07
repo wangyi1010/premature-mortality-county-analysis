@@ -1,0 +1,652 @@
+---
+title: "Predictors of Premature Mortality at the County Level in the United States"
+subtitle: "County-Level Public Health Analysis"
+author: ""
+date: "`r format(Sys.Date(), '%d %B %Y')`"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 2
+    number_sections: true
+header-includes:
+  - \usepackage{booktabs}
+  - \usepackage{float}
+  - \usepackage{caption}
+  - \captionsetup[table]{skip=4pt}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE, message = FALSE, warning = FALSE,
+  fig.align = "center", fig.pos = "H", out.width = "80%"
+)
+suppressPackageStartupMessages({
+  library(readxl)
+  library(readr)
+  library(dplyr)
+  library(tidyr)
+  library(ggplot2)
+  library(knitr)
+})
+theme_set(theme_minimal(base_size = 10))
+fmt <- function(x, d = 2) formatC(x, format = "f", digits = d)
+```
+
+```{r load-merge-clean}
+chr_path <- "data/county_health_rankings_2018.xls"
+op_path  <- "data/opioid_prescribing_2016.csv"
+
+# Dependent variable: Premature age-adjusted mortality (Sheet 6, "Age-Adjusted Mortality")
+dv <- read_excel(chr_path, sheet = 6, skip = 2, col_names = FALSE)[, c(1, 5)]
+names(dv) <- c("FIPS", "premature_aamort")
+
+# Internal predictors (Sheet 4, "Ranked Measure Data")
+iv <- read_excel(chr_path, sheet = 4, skip = 2, col_names = FALSE)[, c(1, 31, 35, 68, 105, 117)]
+names(iv) <- c("FIPS", "pct_smokers", "pct_obese", "pct_uninsured",
+               "grad_rate", "pct_child_poverty")
+
+# External predictor: CDC county opioid dispensing rate, 2016
+op <- read_csv(op_path, show_col_types = FALSE)[, c(3, 4)]
+names(op) <- c("FIPS", "opioid_rate_2016")
+
+county <- dv %>%
+  left_join(iv, by = "FIPS") %>%
+  mutate(FIPS = as.numeric(FIPS)) %>%
+  left_join(mutate(op, FIPS = as.numeric(FIPS)), by = "FIPS") %>%
+  filter(!is.na(FIPS), FIPS > 1000, FIPS %% 1000 != 0) %>%   # counties only
+  mutate(across(-FIPS, ~ suppressWarnings(as.numeric(.))))
+
+vars <- c("premature_aamort", "pct_smokers", "pct_obese",
+          "pct_uninsured", "grad_rate", "pct_child_poverty", "opioid_rate_2016")
+labels <- c(
+  premature_aamort  = "Premature age-adjusted mortality (per 100,000)",
+  pct_smokers       = "Adult smoking (%)",
+  pct_obese         = "Adult obesity (%)",
+  pct_uninsured     = "Uninsured (%)",
+  grad_rate         = "High-school graduation rate (%)",
+  pct_child_poverty = "Children in poverty (%)",
+  opioid_rate_2016  = "Opioid dispensing rate, 2016 (per 100)"
+)
+
+analysis <- county %>% select(all_of(vars)) %>% tidyr::drop_na()
+n_total <- nrow(county); n_complete <- nrow(analysis)
+```
+
+\newpage
+
+# Introduction
+
+County-level health outcomes vary widely across the United States, and the
+factors behind that variation matter for how scarce public-health resources are
+allocated. This report answers the question: **what predicts better health
+outcomes at the county level in the United States?** Following the project
+brief, the outcome is *premature age-adjusted mortality* (deaths before age 75,
+age-standardised, per 100,000 population) from the 2018 County Health Rankings.
+Because lower mortality represents better health, the aim is to identify which
+county-level social, behavioural, healthcare-access, and drug-environment
+variables are most strongly associated with better health outcomes.
+
+Premature mortality is a useful summary of population health because it weights
+the deaths that are, in principle, most avoidable through prevention and timely
+care. Measuring it by county matters for policy, because much U.S. health
+funding and programme delivery is administered locally, so identifying which
+county characteristics travel with worse outcomes helps target limited
+resources. The variation is also large enough to be worth explaining: across the
+analysis sample, premature mortality ranges from about
+`r fmt(min(analysis$premature_aamort),0)` to
+`r fmt(max(analysis$premature_aamort),0)` deaths per 100,000.
+
+This study argues that premature mortality is shaped jointly by four domains:
+health behaviour, socioeconomic disadvantage, healthcare access, and the local
+drug environment. It tests this by building a multivariate linear regression
+model with six predictors and one externally sourced variable (CDC opioid
+dispensing). Previewing the main findings: socioeconomic disadvantage (child
+poverty) and behavioural risk (smoking) are the strongest predictors, opioid
+dispensing adds independent explanatory power, and — contrary to expectation —
+graduation rate is *not* protective once the other variables are controlled,
+a pattern this report interprets as a confounding/suppression effect.
+
+# Hypotheses
+
+- **General hypothesis:** counties with healthier behavioural profiles,
+  lower socioeconomic disadvantage, better healthcare access, and a less harmful
+  drug environment have lower premature mortality.
+
+The specific hypotheses below state both the expected *direction* and, drawing on
+the literature reviewed in the next section, the expected *strength* of each
+association.
+
+- **H1 (smoking):** higher adult smoking rate → higher premature mortality;
+  expected to be one of the strongest predictors, as smoking is the leading
+  preventable cause of death.
+- **H2 (obesity):** higher adult obesity rate → higher premature mortality;
+  expected to be a moderate predictor, since the obesity–mortality association is
+  smaller and more contested than that for smoking.
+- **H3 (uninsured):** higher uninsured rate → higher premature mortality;
+  expected to be a moderate predictor.
+- **H4 (education):** higher high-school graduation rate → *lower* premature
+  mortality; expected to be protective but largely *indirect*, so its independent
+  effect may be weak once behaviour and poverty are held constant.
+- **H5 (child poverty):** higher child poverty rate → higher premature mortality;
+  expected to be among the strongest predictors, as socioeconomic disadvantage is
+  a foundational determinant of health.
+- **H6 (opioids):** higher opioid dispensing rate → higher premature mortality;
+  expected to be positive but secondary to the socioeconomic and behavioural
+  factors.
+
+# Literature and theory
+
+County premature mortality varies widely across the United States, and that
+variation tracks social conditions far more than chance. This study draws on the
+*social determinants of health* framework, which links health to the
+circumstances in which people live, work, and age. In a multicohort study of 1.7 million
+people, Stringhini et al. (2017) show that low socioeconomic status predicts
+premature mortality about as strongly as established behavioural risk factors,
+and that these disadvantages accumulate over the life course. Building on this
+framework, the present study treats county premature mortality as jointly shaped
+by four established domains — socioeconomic disadvantage, educational
+attainment, healthcare access, and behavioural risk — with a fifth contextual
+factor, the local drug environment, added for this project.
+
+Socioeconomic disadvantage is the foundation. Childhood poverty is
+associated with worse health across the life course and elevated mortality risk
+(Wise, 2016), in part through early-life biological embedding that raises later
+cardiovascular risk (Galobardes et al., 2006). Counties with higher child
+poverty are therefore expected to show higher premature mortality (H5,
+positive).
+
+Education is consistently one of the strongest predictors of longevity. A global
+systematic review finds that additional schooling lowers adult mortality
+(IHME-CHAIN Collaborators, 2024), a gradient confirmed in U.S. cohorts (Kaplan
+et al., 2015). Crucially, much of education's protective effect operates
+*indirectly*, through the behaviours and material conditions it shapes: Puka et
+al. (2022) show that lifestyle risk factors such as smoking explain a substantial
+share of the education–mortality gradient. This mediated structure is central to
+the analysis, because it implies that the graduation-rate coefficient may weaken
+or even change sign once smoking and poverty are held constant (H4, expected
+negative but plausibly mediated).
+
+Access to care matters independently of behaviour. Systematic reviews show that health
+insurance increases the use of effective care and improves outcomes (Freeman et
+al., 2008), and that uninsured U.S. adults face higher mortality (Wilper et al.,
+2009; Woolhandler & Himmelstein, 2017). This evidence is weaker than it first
+appears, however: it is largely observational and open to reverse causation and
+selection — sicker and poorer people are also more likely to be uninsured — so the
+independent effect of insurance is harder to isolate than that of a behavioural
+risk. A higher uninsured rate is therefore expected to predict higher mortality,
+though plausibly only modestly (H3, positive).
+
+Behaviour is the most direct pathway of all. Smoking remains the leading preventable
+cause of death in the United States (U.S. Department of Health and Human
+Services, 2014), is strongly associated with all-cause mortality (Lariscy et
+al., 2018), and its harms are at least partly reversible after cessation (Mons et
+al., 2015). Obesity likewise raises all-cause mortality risk across large
+meta-analyses (Flegal et al., 2013; Aune et al., 2016; Jayedi et al., 2022),
+though the size of this association is contested: estimates vary with how body
+mass is categorised, and BMI is an imperfect proxy for adiposity (Flegal et al.,
+2013). Both smoking and obesity are therefore expected to be positive predictors,
+with obesity the weaker of the two (H1, H2).
+
+Finally, this project adds the local drug environment. County-level drug
+mortality is closely tied to the supply of prescription opioids and to the
+economic distress of place (Monnat, 2018; Dasgupta et al., 2018). This evidence is
+itself largely ecological — established across places rather than individuals — so it
+justifies including the opioid dispensing rate as an external predictor without, on
+its own, establishing individual-level risk (H6, positive).
+
+These domains do not act in isolation. Most of education's protective effect is
+expected to run through behaviour and material conditions rather than directly,
+which is why the graduation-rate coefficient may weaken once those factors are
+held constant. Because these determinants are measured at the
+county rather than the individual level, the analysis speaks to ecological
+association rather than individual causation, and aggregate correlations need not
+hold within individuals (Robinson, 1950).
+
+# Data and methodology
+
+## Data sources
+
+```{r data-source-table}
+src <- data.frame(
+  Dataset = c("County Health Rankings 2018", "CDC opioid dispensing, 2016"),
+  Provider = c("Robert Wood Johnson Foundation & Univ. of Wisconsin Population Health Institute",
+               "U.S. Centers for Disease Control and Prevention"),
+  Role = c("Outcome + 5 predictors", "External predictor (opioid_rate_2016)"),
+  Merge = c("FIPS county code", "FIPS county code")
+)
+kable(src, booktabs = TRUE, align = c("l", "l", "l", "l"),
+      caption = "Data sources and their role in the analysis.")
+```
+
+Table 1 summarises the two datasets and their roles. The provided dataset is
+the 2018 County Health Rankings (RWJF & University of Wisconsin Population Health
+Institute, 2018). The outcome, *premature
+age-adjusted mortality*, is taken from the Additional Measure Data sheet. Five
+predictors — adult smoking, adult obesity, uninsured rate, high-school
+graduation rate, and children in poverty — are drawn from the Ranked Measure
+Data sheet. As required, an additional external dataset is merged in: the CDC
+county-level opioid dispensing rate for 2016 (Centers for Disease Control and
+Prevention, 2017), joined on the five-digit FIPS county code.
+
+The County Health Rankings are reasonably reliable because their component
+measures draw from established sources such as the CDC, the Census Bureau's
+American Community Survey, and the National Center for Education Statistics.
+Some measures are modelled estimates with confidence intervals, so county values
+carry sampling uncertainty. Bias mitigation is limited but explicit: counties
+are merged by FIPS rather than names, state roll-ups are filtered out, missingness
+is reported before modelling, and the 2016 opioid rate is treated as a lagged
+exposure rather than a contemporaneous measure.
+
+## Variables and descriptive statistics
+
+```{r descriptives}
+desc <- sapply(analysis, function(x) c(
+  N = sum(!is.na(x)), Mean = mean(x), SD = sd(x),
+  Min = min(x), Median = median(x), Max = max(x)))
+desc <- as.data.frame(t(round(desc, 1)))
+desc <- cbind(Variable = labels[rownames(desc)], desc)
+rownames(desc) <- NULL
+kable(desc, booktabs = TRUE, row.names = FALSE,
+      align = c("l", rep("r", ncol(desc) - 1)),
+      caption = "Descriptive statistics, complete-case analysis sample.")
+```
+
+Table 2 reports the mean, spread, and range of each variable across the
+complete-case sample; the predictors are measured on comparable percentage or
+rate scales, while the opioid dispensing rate shows the widest dispersion.
+
+## Missing data
+
+```{r missingness}
+miss <- county %>% select(all_of(vars)) %>%
+  summarise(across(everything(), ~ sum(is.na(.)))) %>%
+  pivot_longer(everything(), names_to = "Variable", values_to = "Missing")
+miss$Variable <- labels[miss$Variable]
+kable(miss, booktabs = TRUE, align = c("l", "r"),
+      caption = sprintf("Missing values by variable (of %d counties). Complete-case N = %d.",
+                        n_total, n_complete))
+```
+
+Listwise deletion is used, giving a complete-case sample of `r n_complete`
+counties out of `r n_total`. As Table 3 shows, most missingness is driven by the
+graduation rate (`r sum(is.na(county$grad_rate))` counties) and the opioid
+dispensing rate (`r sum(is.na(county$opioid_rate_2016))` counties).
+
+Listwise deletion is a pragmatic but imperfect choice: it gives a transparent
+regression sample, but may under-represent smaller or more rural counties because
+missingness is concentrated in graduation and opioid data. Imputation is not used
+because assuming those counties resemble reporting counties is untestable; this
+representativeness issue is revisited in the limitations.
+
+## Method
+
+No log transformation or recoding is applied in the main model because the
+selected variables are already interpretable percentages or rates. Coefficients
+are kept in their original units for substantive interpretation, while
+standardised coefficients are used only as a supplementary way to compare
+relative predictor strength.
+
+The outcome is continuous, so the analysis uses **multiple linear regression
+(ordinary least squares)** with the six predictors entered simultaneously. OLS
+is chosen because it directly estimates the partial association of each
+predictor with mortality, holding the others constant, and the coefficients are
+interpretable as a change in deaths per 100,000. In the full model, each
+predictor also acts as a control variable for the others. The model is:
+
+$$
+\text{Mortality}_i = \beta_0 + \beta_1 \text{Smoking}_i + \beta_2 \text{Obesity}_i
++ \beta_3 \text{Uninsured}_i + \beta_4 \text{Graduation}_i
++ \beta_5 \text{ChildPoverty}_i + \beta_6 \text{Opioid}_i + \varepsilon_i
+$$
+
+Three modelling assumptions are examined below: linearity and constant error
+variance through a residuals-versus-fitted plot, and multicollinearity through
+variance inflation factors. As a method, OLS is well suited to this task — it
+yields transparent, directly interpretable partial coefficients — but it also
+assumes a linear, additive specification with independent errors, so it cannot
+capture spatial dependence between neighbouring counties or any non-linear
+effects. One feature of the design cannot be addressed by
+diagnostics. Because every variable is measured for the county as a whole, the
+coefficients describe differences between places rather than between people, and
+reading a county-level association as an individual-level effect would be an
+ecological fallacy; the interpretation throughout is framed accordingly.
+
+# Results
+
+## Exploratory data analysis
+
+```{r distributions, fig.height=4.6, out.width="100%", fig.cap="Distributions of the outcome and predictors across counties."}
+dist_labels <- c(premature_aamort = "Mortality", pct_smokers = "Smoking",
+                 pct_obese = "Obesity", pct_uninsured = "Uninsured",
+                 grad_rate = "Graduation", pct_child_poverty = "Child poverty",
+                 opioid_rate_2016 = "Opioid")
+analysis %>%
+  rename_with(~ dist_labels[.x]) %>%
+  pivot_longer(everything(), names_to = "Variable", values_to = "Value") %>%
+  ggplot(aes(Value)) +
+  geom_histogram(bins = 40, fill = "#2C6E91", colour = "white", linewidth = 0.1) +
+  facet_wrap(~ Variable, scales = "free", ncol = 3) +
+  labs(x = NULL, y = "Counties")
+```
+
+```{r corr-heatmap, fig.height=3.8, fig.cap="Pearson correlations among the outcome and predictors."}
+short <- c(premature_aamort = "Mortality", pct_smokers = "Smoking",
+           pct_obese = "Obesity", pct_uninsured = "Uninsured",
+           grad_rate = "Graduation", pct_child_poverty = "Child poverty",
+           opioid_rate_2016 = "Opioid")
+cmat <- cor(analysis)
+dimnames(cmat) <- list(short[rownames(cmat)], short[colnames(cmat)])
+cdf <- as.data.frame(as.table(cmat))
+names(cdf) <- c("V1", "V2", "r")
+ggplot(cdf, aes(V1, V2, fill = r)) +
+  geom_tile(colour = "white") +
+  geom_text(aes(label = fmt(r, 2)), size = 2.7) +
+  scale_fill_gradient2(low = "#B2182B", mid = "white", high = "#2166AC",
+                       midpoint = 0, limits = c(-1, 1)) +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1)) +
+  labs(x = NULL, y = NULL, fill = "r")
+```
+
+The outcome ranges from `r fmt(min(analysis$premature_aamort),0)` to
+`r fmt(max(analysis$premature_aamort),0)` premature deaths per 100,000
+(mean `r fmt(mean(analysis$premature_aamort),0)`). Bivariately (Figure 2), child poverty
+(r = `r fmt(cor(analysis$pct_child_poverty, analysis$premature_aamort))`) and
+smoking (r = `r fmt(cor(analysis$pct_smokers, analysis$premature_aamort))`) are
+the strongest correlates; graduation rate is only weakly (and negatively)
+associated (r = `r fmt(cor(analysis$grad_rate, analysis$premature_aamort))`).
+
+Two features of the data shape what follows. First, the predictors are
+themselves correlated — adult smoking and obesity move together across counties
+(r = `r fmt(cor(analysis$pct_smokers, analysis$pct_obese))`), as do poverty and
+several behavioural measures — so the partial coefficients from the full model
+can differ from these simple correlations once the variables are entered
+together. Second, as Figure 1 shows, most variables are roughly symmetric, but
+the opioid dispensing rate is right-skewed, with a long tail of
+high-dispensing counties.
+The strong bivariate links from child poverty and smoking to mortality already
+foreshadow their prominence in the regression.
+
+## Regression model
+
+```{r model}
+m <- lm(premature_aamort ~ pct_smokers + pct_obese + pct_uninsured +
+          grad_rate + pct_child_poverty + opioid_rate_2016, data = analysis)
+co <- summary(m)$coefficients
+ci <- confint(m)
+reg <- data.frame(
+  Predictor = c("(Intercept)", labels[c("pct_smokers","pct_obese","pct_uninsured",
+                "grad_rate","pct_child_poverty","opioid_rate_2016")]),
+  b = fmt(co[, 1], 3),
+  SE = fmt(co[, 2], 3),
+  `95% CI` = sprintf("[%s, %s]", fmt(ci[, 1], 2), fmt(ci[, 2], 2)),
+  t = fmt(co[, 3], 2),
+  p = ifelse(co[, 4] < .001, "<.001", fmt(co[, 4], 3)),
+  check.names = FALSE
+)
+kable(reg, booktabs = TRUE, row.names = FALSE,
+      align = c("l", "r", "r", "r", "r", "r"),
+      caption = sprintf("OLS regression predicting premature age-adjusted mortality. Coefficients are unstandardised; 95 per cent confidence intervals in brackets. N = %d; R-squared = %.3f; adjusted R-squared = %.3f.",
+                        nobs(m), summary(m)$r.squared, summary(m)$adj.r.squared))
+```
+
+```{r vif, include=FALSE}
+# VIF without the car package: for an OLS model with only continuous
+# predictors, VIF_j = 1 / (1 - R^2_j), where R^2_j is obtained by
+# regressing predictor j on all the other predictors.
+X <- model.matrix(m)[, -1, drop = FALSE]
+vif_values <- setNames(vapply(seq_len(ncol(X)), function(j)
+  1 / (1 - summary(lm(X[, j] ~ X[, -j, drop = FALSE]))$r.squared),
+  numeric(1)), colnames(X))
+max_vif <- max(vif_values)
+max_vif_label <- labels[names(which.max(vif_values))]
+```
+
+The full model (Table 4) explains `r fmt(summary(m)$r.squared*100,1)`% of the
+variation in county premature mortality. Five of six predictors carry the
+expected positive
+sign and are significant at p < .001: smoking, obesity, uninsured rate, child
+poverty, and opioid dispensing. The largest variance inflation factor is
+`r fmt(max_vif)` for `r max_vif_label`, well below the common threshold of 5, so
+multicollinearity does not indicate a serious threat to these estimates.
+
+```{r standardized-coefficients, fig.height=3.3, fig.cap="Standardized coefficients from the OLS model."}
+std_vars <- c("pct_smokers", "pct_obese", "pct_uninsured",
+              "grad_rate", "pct_child_poverty", "opioid_rate_2016")
+std_df <- data.frame(
+  Predictor = labels[std_vars],
+  Standardized = as.numeric(co[std_vars, 1]) *
+    sapply(analysis[std_vars], sd) / sd(analysis$premature_aamort),
+  row.names = NULL
+)
+std_df <- std_df %>%
+  arrange(abs(Standardized)) %>%
+  mutate(Predictor = factor(Predictor, levels = Predictor))
+ggplot(std_df, aes(Standardized, Predictor)) +
+  geom_vline(xintercept = 0, colour = "grey55", linewidth = 0.3) +
+  geom_col(fill = "#2C6E91", width = 0.65) +
+  geom_text(aes(label = fmt(Standardized, 2)), hjust = -0.15, size = 3) +
+  coord_cartesian(xlim = c(0, max(std_df$Standardized) + 0.06)) +
+  labs(x = "Standardized coefficient", y = NULL)
+```
+
+Because the predictors are measured on different scales, Figure 3 compares
+their relative strength using standardised coefficients. This confirms that
+child poverty is the strongest predictor, followed by smoking and opioid
+dispensing. Obesity and uninsured rate remain positive but smaller, while
+graduation rate is close to zero in practical terms.
+
+The exception is **graduation rate**: H4 predicted a negative coefficient, but
+the estimate is small and *positive* (b = `r fmt(co["grad_rate",1])`,
+p = `r fmt(co["grad_rate",4],3)`), despite a negative bivariate correlation.
+
+```{r nested-models}
+m1 <- lm(premature_aamort ~ grad_rate, data = analysis)
+g1 <- summary(m1)$coefficients["grad_rate", ]
+g2 <- co["grad_rate", ]
+nested <- data.frame(
+  Model = c("Model 1: graduation rate only", "Model 2: full model (6 predictors)"),
+  b = fmt(c(g1[1], g2[1]), 3),
+  SE = fmt(c(g1[2], g2[2]), 3),
+  p = ifelse(c(g1[4], g2[4]) < .001, "<.001", fmt(c(g1[4], g2[4]), 3)),
+  check.names = FALSE
+)
+kable(nested, booktabs = TRUE, row.names = FALSE,
+      align = c("l", "r", "r", "r"),
+      caption = "Graduation-rate coefficient (unstandardised) before and after controlling for the other five predictors.")
+```
+
+Table 5 makes this explicit: on its own, graduation rate has a negative
+coefficient, but it loses that once the other five predictors are controlled.
+This sign reversal does not mean education is harmful; it reflects *confounding*
+and a *suppression* effect rather than a real property of education. Considered on its own, graduation rate is
+negatively correlated with premature mortality
+(r = `r fmt(cor(analysis$grad_rate, analysis$premature_aamort))`): counties that
+graduate more of their students do tend to have fewer premature deaths. That
+bivariate relationship, however, largely reflects the characteristics of
+counties with higher graduation rates — such counties also smoke less, are less
+obese, and have lower child poverty. Once smoking, obesity, uninsured status, child poverty, and
+opioid dispensing are entered as *control variables*, the graduation coefficient
+becomes a *conditional association*: the residual relationship that survives after
+holding those other determinants constant. Almost none does, which is exactly
+what the literature anticipates — education's protective influence operates
+largely *through* behaviour and material conditions rather than directly (Puka et
+al., 2022). Holding those pathways constant leaves little of the original
+negative signal — what remains is a small positive partial association. Because the design is cross-sectional and ecological, this is
+offered as an interpretation *consistent with* the data, not as evidence of causal
+mediation, and the county-level pattern should not be read as an individual-level
+effect (Robinson, 1950).
+
+```{r diagnostics, fig.height=3.2, fig.cap="Residuals vs fitted values for the OLS model."}
+diag <- data.frame(fitted = fitted(m), resid = resid(m))
+ggplot(diag, aes(fitted, resid)) +
+  geom_point(alpha = 0.25, size = 0.7) +
+  geom_hline(yintercept = 0, colour = "#B2182B") +
+  geom_smooth(se = FALSE, linewidth = 0.6) +
+  labs(x = "Fitted mortality", y = "Residual")
+```
+
+The residuals-versus-fitted plot (Figure 4) scatters around zero with no strong
+curvature, so the linear specification is reasonable. Their spread widens modestly at higher fitted
+values, indicating mild heteroskedasticity; this leaves the coefficient
+estimates unbiased but means their standard errors are best read as approximate,
+and a robust-standard-error or weighted specification would be a sensible
+robustness check.
+
+# Discussion and conclusion
+
+Across more than 2,600 U.S. counties, premature mortality reflects several
+social conditions acting together. The
+multivariate model supports five of the six hypotheses: behavioural risk
+(smoking, obesity), limited healthcare access (uninsured), socioeconomic
+disadvantage (child poverty), and a harmful drug environment (opioid
+dispensing) are each independently associated with higher premature mortality
+(H1, H2, H3, H5, H6), and together they explain about
+`r fmt(summary(m)$r.squared*100,0)`% of the cross-county variation. This pattern
+is consistent with the social-determinants-of-health framework: place-based
+health is shaped jointly by how people behave, how disadvantaged they are,
+whether they can reach care, and the local drug environment, rather than by any
+single cause. H4 is the exception — graduation rate shows no protective
+*independent* effect once the other determinants are controlled — but, as argued
+above, this is consistent with education acting *through* behaviour and poverty,
+not with education being unimportant.
+
+These findings also illustrate several broader methodological concepts. The graduation
+result shows why *confounding* and control variables matter: a bivariate
+relationship can change once related social conditions are held constant. The
+county-level design also creates an *ecological-inference* problem, so the
+coefficients describe places rather than individuals. Finally, the complete-case
+sample and mild heteroskedasticity show how sampling and model assumptions shape
+how confidently the results can be generalised.
+
+The strongest caveat is design. Because the analysis is *ecological* and
+*cross-sectional*, associations measured across counties cannot be transferred
+to individuals — a county-level coefficient does not describe any one person's
+risk (Robinson, 1950) — and they identify association rather than causation.
+
+Beyond design, the data impose further limits. The complete-case sample reflects
+listwise deletion, with missingness concentrated in the graduation-rate and
+opioid-dispensing variables, which may bias the sample toward counties with
+more complete reporting (typically larger, less rural ones). There is also a
+*temporal mismatch*: the opioid measure is from 2016 while the outcome is from
+2018, which can be read benignly as a lagged exposure but remains a limitation.
+Finally, the model omits plausible *confounders* — county age structure, racial
+composition, rurality, healthcare infrastructure, and state-level policy — any of
+which could inflate or mask the estimated relationships.
+
+The clearest next step is a spatial or multilevel model that tests the
+ecological gap rather than assuming it. State fixed effects would absorb regional
+clustering and unobserved state policy; an age-adjusted comparison would separate
+demographic structure from health behaviour; and multiple imputation with
+sensitivity checks would show how far the complete-case restriction shapes the
+results. Even within these limits, the analysis suggests that county premature
+mortality is a multi-determined outcome, in which supply-side drug factors and
+entrenched socioeconomic disadvantage both warrant policy attention.
+
+# Use of AI
+
+Generative AI tools were used as a support aid: to help structure the report, to
+debug and tidy the R code, and to improve wording. All research-design
+decisions, variable selection, data handling, statistical interpretation, and
+final written content are my own and have been reviewed by me. AI was not used
+to fabricate data, results, or citations. References were reviewed for
+consistency and relevance before release.
+
+# Bibliography
+
+Aune, D., Sen, A., Prasad, M., Norat, T., Janszky, I., Tonstad, S., Romundstad,
+P., & Vatten, L. J. (2016). BMI and all-cause mortality: Systematic review and
+non-linear dose-response meta-analysis of 230 cohort studies with 3.74 million
+deaths among 30.3 million participants. *BMJ, 353*, i2156.
+https://pubmed.ncbi.nlm.nih.gov/27146380/
+
+Centers for Disease Control and Prevention. (2017). *U.S. county opioid
+dispensing rates, 2016* [Data set].
+https://archive.cdc.gov/www_cdc_gov/drugoverdose/rxrate-maps/county2016.html
+
+Dasgupta, N., Beletsky, L., & Ciccarone, D. (2018). Opioid crisis: No easy fix
+to its social and economic determinants. *American Journal of Public Health,
+108*(2), 182–186. https://pubmed.ncbi.nlm.nih.gov/29267060/
+
+Flegal, K. M., Kit, B. K., Orpana, H., & Graubard, B. I. (2013). Association of
+all-cause mortality with overweight and obesity using standard body mass index
+categories: A systematic review and meta-analysis. *JAMA, 309*(1), 71–82.
+https://pubmed.ncbi.nlm.nih.gov/23280227/
+
+Freeman, J. D., Kadiyala, S., Bell, J. F., & Martin, D. P. (2008). The causal
+effect of health insurance on utilization and outcomes in adults: A systematic
+review of US studies. *Medical Care, 46*(10), 1023–1032.
+https://pubmed.ncbi.nlm.nih.gov/18815523/
+
+Galobardes, B., Smith, G. D., & Lynch, J. W. (2006). Systematic review of the
+influence of childhood socioeconomic circumstances on risk for cardiovascular
+disease in adulthood. *Annals of Epidemiology, 16*(2), 91–104.
+https://pubmed.ncbi.nlm.nih.gov/16257232/
+
+IHME-CHAIN Collaborators. (2024). Effects of education on adult mortality: A
+global systematic review and meta-analysis. *The Lancet Public Health, 9*(3),
+e186–e198. https://pubmed.ncbi.nlm.nih.gov/38278172/
+
+Jayedi, A., Khan, T. A., Aune, D., Emadi, A., & Shab-Bidar, S. (2022). Body fat
+and risk of all-cause mortality: A systematic review and dose-response
+meta-analysis of prospective cohort studies. *International Journal of Obesity,
+46*, 1573–1581. https://pubmed.ncbi.nlm.nih.gov/35717418/
+
+Kaplan, R. M., Howard, V. J., Safford, M. M., Howard, G., & Popkin, B. M. (2015).
+Educational attainment and longevity: Results from the REGARDS US national
+cohort study. *Health Psychology, 34*(4), 398–405.
+https://pubmed.ncbi.nlm.nih.gov/25791026/
+
+Lariscy, J. T., Hummer, R. A., & Rogers, R. G. (2018). Cigarette smoking and
+all-cause and cause-specific adult mortality in the United States. *Demography,
+55*(5), 1855–1885. https://pubmed.ncbi.nlm.nih.gov/30232778/
+
+Monnat, S. M. (2018). Factors associated with county-level differences in U.S.
+drug-related mortality rates. *American Journal of Preventive Medicine, 54*(5),
+611–619. https://pubmed.ncbi.nlm.nih.gov/29598858/
+
+Mons, U., Müezzinler, A., Gellert, C., Schöttker, B., Abnet, C. C., Bobak, M., de
+Groot, L., Freedman, N. D., Jansen, E., Kee, F., Kromhout, D., Kuulasmaa, K.,
+Laatikainen, T., O'Doherty, M. G., Bueno-de-Mesquita, B., Orfanos, P., Peters,
+A., van der Schouw, Y. T., Wilsgaard, T., . . . Brenner, H. (2015). Impact of
+smoking and smoking cessation on cardiovascular events and mortality among older
+adults: Meta-analysis of individual participant data from prospective cohort
+studies of the CHANCES consortium. *BMJ, 350*, h1551.
+https://pubmed.ncbi.nlm.nih.gov/25896935/
+
+Puka, K., Buckley, C., Mulia, N., Lasserre, A. M., Rehm, J., & Probst, C. (2022).
+Educational attainment and lifestyle risk factors associated with all-cause
+mortality in the US. *JAMA Health Forum, 3*(4), e220401.
+https://pubmed.ncbi.nlm.nih.gov/35445213/
+
+Robert Wood Johnson Foundation, & University of Wisconsin Population Health
+Institute. (2018). *2018 County Health Rankings national data* [Data set].
+https://www.countyhealthrankings.org
+
+Robinson, W. S. (1950). Ecological correlations and the behavior of individuals.
+*American Sociological Review, 15*(3), 351–357.
+https://doi.org/10.2307/2087176
+
+Stringhini, S., Carmeli, C., Jokela, M., Avendaño, M., Muennig, P., Guida, F.,
+Ricceri, F., d'Errico, A., Barros, H., Bochud, M., Chadeau-Hyam, M.,
+Clavel-Chapelon, F., Costa, G., Delpierre, C., Fraga, S., Goldberg, M., Giles, G.
+G., Krogh, V., Kelly-Irving, M., . . . Zins, M. (2017). Socioeconomic status and
+the 25 × 25 risk factors as determinants of premature mortality: A multicohort
+study and meta-analysis of 1.7 million men and women. *The Lancet, 389*(10075),
+1229–1237. https://pubmed.ncbi.nlm.nih.gov/28159391/
+
+U.S. Department of Health and Human Services. (2014). *The health consequences of
+smoking—50 years of progress: A report of the Surgeon General.* Centers for
+Disease Control and Prevention. https://www.ncbi.nlm.nih.gov/books/NBK179276/
+
+Wilper, A. P., Woolhandler, S., Lasser, K. E., McCormick, D., Bor, D. H., &
+Himmelstein, D. U. (2009). Health insurance and mortality in US adults.
+*American Journal of Public Health, 99*(12), 2289–2295.
+https://pubmed.ncbi.nlm.nih.gov/19762659/
+
+Wise, P. H. (2016). Child poverty and the promise of human capacity: Childhood as
+a foundation for healthy aging. *Academic Pediatrics, 16*(3 Suppl), S37–S45.
+https://pubmed.ncbi.nlm.nih.gov/27044700/
+
+Woolhandler, S., & Himmelstein, D. U. (2017). The relationship of health
+insurance and mortality: Is lack of insurance deadly? *Annals of Internal
+Medicine, 167*(6), 424–431. https://pubmed.ncbi.nlm.nih.gov/28655034/
