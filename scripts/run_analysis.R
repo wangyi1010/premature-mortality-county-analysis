@@ -14,7 +14,8 @@ source("R/plots.R")
 dir.create("outputs/figures", recursive = TRUE, showWarnings = FALSE)
 
 message("Loading data ...")
-df <- load_county_data("data/raw")
+df_all <- load_county_data("data/raw", complete_cases = FALSE)  # for the map
+df <- load_county_data("data/raw")                              # modelling sample
 message(sprintf("  %d counties in the complete-case modelling sample", nrow(df)))
 
 message("Fitting model ...")
@@ -34,6 +35,8 @@ for (name in names(figs)) {
   ggplot2::ggsave(file.path("outputs/figures", name), figs[[name]],
                   width = 8, height = 5, dpi = 150, bg = "white")
 }
+ggplot2::ggsave("outputs/figures/mortality_map.png", plot_mortality_map(df_all),
+                width = 9, height = 6, dpi = 150, bg = "white")
 
 message("Writing model summary ...")
 sink("outputs/model_summary.txt")

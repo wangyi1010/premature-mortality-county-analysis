@@ -54,6 +54,28 @@ plot_key_scatter <- function(df) {
     theme(plot.title.position = "plot")
 }
 
+#' County choropleth of premature age-adjusted mortality.
+#'
+#' Uses usmap's bundled, FIPS-keyed county geometry (Alaska and Hawaii inset), so
+#' no shapefile is downloaded at runtime. Expects the full merged frame; counties
+#' missing the outcome are left unfilled (grey).
+plot_mortality_map <- function(df) {
+  map_df <- data.frame(
+    fips = sprintf("%05d", as.integer(df$FIPS)),
+    value = df$premature_aamort
+  )
+  usmap::plot_usmap(regions = "counties", data = map_df, values = "value",
+                    color = NA, linewidth = 0) +
+    ggplot2::scale_fill_viridis_c(
+      option = "magma", direction = -1, na.value = "grey90",
+      name = "Deaths\nper 100,000") +
+    ggplot2::labs(
+      title = "Premature age-adjusted mortality by US county",
+      subtitle = "County Health Rankings, 2018") +
+    ggplot2::theme(legend.position = "right",
+                   plot.title.position = "plot")
+}
+
 #' Actual vs fitted values, to show overall model fit.
 plot_actual_fitted <- function(model, df) {
   d <- data.frame(actual = df$premature_aamort, fitted = fitted(model))

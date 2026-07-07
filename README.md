@@ -18,6 +18,11 @@ High-school graduation rate — expected to protect against mortality — loses 
 its association once socioeconomic and behavioural factors are held constant: a textbook
 case of confounding.
 
+![Premature mortality by US county](outputs/figures/mortality_map.png)
+
+Mortality clusters visibly in Appalachia, the Deep South, and parts of the rural West —
+the same places where child poverty and smoking are highest.
+
 ![Standardised coefficients](outputs/figures/coefficients.png)
 
 | Predictor | Std. coefficient | Direction |
@@ -94,6 +99,16 @@ rmarkdown::render("report.Rmd")
 
 Continuous integration (`.github/workflows/analysis.yml`) runs the tests, regenerates the
 figures, and re-renders the report on every push.
+
+## Limitations
+
+This is an **ecological (county-level) analysis**: the units are counties, not people,
+so the coefficients describe differences between places, not effects on individuals.
+Reading a county-level association as an individual-level causal effect would be an
+ecological fallacy. The design is cross-sectional and observational — associations are
+not causal — and unmeasured confounders (age structure, rurality, healthcare
+infrastructure, state policy) plus listwise deletion of incomplete counties may bias
+estimates. The report discusses these in full.
 
 ## Data sources
 

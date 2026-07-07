@@ -16,7 +16,8 @@ Imports:
     readr,
     readxl,
     scales,
-    tidyr
+    tidyr,
+    usmap
 Suggests:
     rmarkdown,
     testthat (>= 3.0.0)
