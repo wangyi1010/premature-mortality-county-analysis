@@ -1,9 +1,26 @@
+# R session
 .Rhistory
 .RData
 .Rproj.user/
+.Ruserdata
+
+# OS
 .DS_Store
-*.html
+
+# knitr / rmarkdown intermediates
+report_files/
+*_files/
+*.knit.md
+*.utf8.md
+
+# LaTeX build cruft
 *.log
 *.aux
 *.out
 *.toc
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+
+# NOTE: outputs/figures/*.png and outputs/model_summary.txt are committed on
+# purpose so the README renders and results are visible without running R.

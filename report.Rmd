@@ -33,43 +33,21 @@ fmt <- function(x, d = 2) formatC(x, format = "f", digits = d)
 ```
 
 ```{r load-merge-clean}
-chr_path <- "data/county_health_rankings_2018.xls"
-op_path  <- "data/opioid_prescribing_2016.csv"
+# Data loading, cleaning and modelling live in R/ so the report, the pipeline
+# script and the tests all share one implementation. See R/data.R for the exact
+# sheet/column logic and the county-vs-aggregate filtering.
+source("R/data.R")
+source("R/model.R")
+source("R/plots.R")
 
-# Dependent variable: Premature age-adjusted mortality (Sheet 6, "Age-Adjusted Mortality")
-dv <- read_excel(chr_path, sheet = 6, skip = 2, col_names = FALSE)[, c(1, 5)]
-names(dv) <- c("FIPS", "premature_aamort")
+county   <- load_county_data("data/raw", complete_cases = FALSE)  # all merged rows
+analysis <- load_county_data("data/raw", complete_cases = TRUE) %>%
+  select(all_of(analysis_vars))                                  # modelling sample
 
-# Internal predictors (Sheet 4, "Ranked Measure Data")
-iv <- read_excel(chr_path, sheet = 4, skip = 2, col_names = FALSE)[, c(1, 31, 35, 68, 105, 117)]
-names(iv) <- c("FIPS", "pct_smokers", "pct_obese", "pct_uninsured",
-               "grad_rate", "pct_child_poverty")
-
-# External predictor: CDC county opioid dispensing rate, 2016
-op <- read_csv(op_path, show_col_types = FALSE)[, c(3, 4)]
-names(op) <- c("FIPS", "opioid_rate_2016")
-
-county <- dv %>%
-  left_join(iv, by = "FIPS") %>%
-  mutate(FIPS = as.numeric(FIPS)) %>%
-  left_join(mutate(op, FIPS = as.numeric(FIPS)), by = "FIPS") %>%
-  filter(!is.na(FIPS), FIPS > 1000, FIPS %% 1000 != 0) %>%   # counties only
-  mutate(across(-FIPS, ~ suppressWarnings(as.numeric(.))))
-
-vars <- c("premature_aamort", "pct_smokers", "pct_obese",
-          "pct_uninsured", "grad_rate", "pct_child_poverty", "opioid_rate_2016")
-labels <- c(
-  premature_aamort  = "Premature age-adjusted mortality (per 100,000)",
-  pct_smokers       = "Adult smoking (%)",
-  pct_obese         = "Adult obesity (%)",
-  pct_uninsured     = "Uninsured (%)",
-  grad_rate         = "High-school graduation rate (%)",
-  pct_child_poverty = "Children in poverty (%)",
-  opioid_rate_2016  = "Opioid dispensing rate, 2016 (per 100)"
-)
-
-analysis <- county %>% select(all_of(vars)) %>% tidyr::drop_na()
-n_total <- nrow(county); n_complete <- nrow(analysis)
+vars   <- analysis_vars
+labels <- variable_labels
+n_total    <- nrow(county)
+n_complete <- nrow(analysis)
 ```
 
 \newpage

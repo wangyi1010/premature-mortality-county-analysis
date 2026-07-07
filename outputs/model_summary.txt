@@ -1,0 +1,48 @@
+Premature mortality at the US county level -- model summary
+Generated: 2026-07-07 12:39 
+
+N = 2611 counties | R-squared = 0.732 | adjusted R-squared = 0.731
+
+Standardised coefficients (strongest first):
+                                  label   std_coef
+                Children in poverty (%) 0.39863191
+                      Adult smoking (%) 0.27006531
+ Opioid dispensing rate, 2016 (per 100) 0.21387478
+                      Adult obesity (%) 0.15759824
+                          Uninsured (%) 0.11127821
+        High-school graduation rate (%) 0.02553572
+
+Variance inflation factors:
+                                  label      vif
+                Children in poverty (%) 2.482951
+                      Adult smoking (%) 2.475707
+                      Adult obesity (%) 1.707757
+                          Uninsured (%) 1.347445
+ Opioid dispensing rate, 2016 (per 100) 1.179059
+        High-school graduation rate (%) 1.085390
+
+Full OLS summary:
+
+Call:
+lm(formula = model_formula, data = df)
+
+Residuals:
+    Min      1Q  Median      3Q     Max 
+-260.70  -33.63   -3.65   29.36  460.23 
+
+Coefficients:
+                  Estimate Std. Error t value Pr(>|t|)    
+(Intercept)       -69.3100    14.1385  -4.902 1.01e-06 ***
+pct_smokers         8.2799     0.4898  16.906  < 2e-16 ***
+pct_obese           3.6779     0.3096  11.879  < 2e-16 ***
+pct_uninsured       2.3881     0.2529   9.442  < 2e-16 ***
+grad_rate           0.3380     0.1400   2.414   0.0158 *  
+pct_child_poverty   4.6557     0.1868  24.918  < 2e-16 ***
+opioid_rate_2016    0.5703     0.0294  19.401  < 2e-16 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 55.05 on 2604 degrees of freedom
+Multiple R-squared:  0.7316,	Adjusted R-squared:  0.731 
+F-statistic:  1183 on 6 and 2604 DF,  p-value: < 2.2e-16
+

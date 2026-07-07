@@ -1,0 +1,23 @@
+Package: prematureMortalityCounty
+Title: Predictors of Premature Mortality at the US County Level
+Version: 1.0.0
+Authors@R: person("wangyi1010", role = c("aut", "cre"))
+Description: A reproducible analysis of the social, behavioural,
+    healthcare-access and drug-environment factors associated with premature
+    age-adjusted mortality across United States counties, using County Health
+    Rankings 2018 and CDC opioid dispensing data. Not a distributable package;
+    the DESCRIPTION exists to declare dependencies for renv.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Imports:
+    car,
+    dplyr,
+    ggplot2,
+    knitr,
+    readr,
+    readxl,
+    scales,
+    tidyr
+Suggests:
+    rmarkdown,
+    testthat (>= 3.0.0)
